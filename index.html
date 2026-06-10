@@ -1082,9 +1082,58 @@
     <script>
       window.dataLayer = window.dataLayer || [];
 
+      function getSessionId() {
+        var key = "ctefacil_session_id";
+        var existing = "";
+        try {
+          existing = localStorage.getItem(key) || "";
+        } catch (_) {}
+        if (existing) return existing;
+
+        var sid = "";
+        try {
+          sid = (crypto && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "") || "";
+        } catch (_) {}
+        if (!sid) sid = String(Date.now()) + "_" + String(Math.random()).slice(2);
+        try {
+          localStorage.setItem(key, sid);
+        } catch (_) {}
+        return sid;
+      }
+
+      var analyticsSessionId = getSessionId();
+      var currentViewId = "viewIntro";
+
+      function sendToAdmin(eventName, payload) {
+        var body = JSON.stringify({
+          sessionId: analyticsSessionId,
+          event: eventName,
+          ts: Date.now(),
+          payload: payload && typeof payload === "object" ? payload : {},
+        });
+
+        try {
+          if (navigator && typeof navigator.sendBeacon === "function") {
+            var blob = new Blob([body], { type: "application/json" });
+            navigator.sendBeacon("/api/track", blob);
+            return;
+          }
+        } catch (_) {}
+
+        try {
+          fetch("/api/track", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: body,
+            keepalive: true,
+          }).catch(function () {});
+        } catch (_) {}
+      }
+
       function trackEvent(name, payload) {
         var safePayload = payload && typeof payload === "object" ? payload : {};
         window.dataLayer.push({ event: name, ...safePayload });
+        sendToAdmin(name, safePayload);
 
         if (typeof window.fbq === "function") {
           try {
@@ -1295,10 +1344,12 @@
       ];
 
       function showView(id) {
+        currentViewId = id;
         viewIds.forEach(function (viewId) {
           document.getElementById(viewId).classList.toggle("hidden", viewId !== id);
         });
         window.scrollTo({ top: 0, behavior: "smooth" });
+        sendToAdmin("View", { view: id });
       }
 
       function renderQuizStep() {
@@ -1660,7 +1711,7 @@
           };
 
           saveLead();
-          trackEvent("Lead", { ...state.lead, ...state.answers });
+          trackEvent("Lead", { ...state.lead, ...state.answers, answersOther: state.answersOther });
           showProcessing();
           return;
         }
@@ -1950,6 +2001,10 @@
       });
 
       trackEvent("PageView", { page: "quiz_lp_ctefacil" });
+      sendToAdmin("View", { view: currentViewId });
+      setInterval(function () {
+        sendToAdmin("Heartbeat", { view: currentViewId, page: "quiz_lp_ctefacil" });
+      }, 10000);
     </script>
   </body>
 </html>
