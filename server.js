@@ -6,6 +6,9 @@ const crypto = require("crypto");
 
 const PORT = Number(process.env.PORT || 5173);
 const HOST = process.env.HOST || "0.0.0.0";
+const ADMIN_PASSWORD = "Tfa2026";
+const ADMIN_COOKIE = "ctefacil_admin";
+const ADMIN_COOKIE_VALUE = crypto.createHash("sha256").update("ctefacil_admin:" + ADMIN_PASSWORD).digest("hex");
 
 const state = {
   events: [],
@@ -37,6 +40,31 @@ function readBody(req) {
     });
     req.on("end", () => resolve(data));
   });
+}
+
+function parseCookies(req) {
+  const raw = req.headers.cookie || "";
+  const out = {};
+  raw.split(";").forEach((part) => {
+    const idx = part.indexOf("=");
+    if (idx <= 0) return;
+    const key = part.slice(0, idx).trim();
+    const value = part.slice(idx + 1).trim();
+    out[key] = decodeURIComponent(value);
+  });
+  return out;
+}
+
+function parseFormUrlEncoded(text) {
+  const params = new URLSearchParams(String(text || ""));
+  const out = {};
+  for (const [key, value] of params.entries()) out[key] = value;
+  return out;
+}
+
+function isAdminAuthorized(req) {
+  const cookies = parseCookies(req);
+  return cookies[ADMIN_COOKIE] === ADMIN_COOKIE_VALUE;
 }
 
 function json(res, code, payload) {
@@ -296,14 +324,15 @@ const adminHtml = `<!doctype html>
       .btn:hover{filter:brightness(1.1)}
       .small{font-size:12px}
       .detail{white-space:pre-wrap;background:rgba(2,6,23,.6);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;min-height:160px}
+      .brand{display:flex;align-items:center;gap:12px}
+      .brand img{display:block;height:42px;width:auto;max-width:220px;object-fit:contain}
       @media (max-width: 980px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
     </style>
   </head>
   <body>
     <header>
-      <div>
-        <h1>CT-e Fácil Admin</h1>
-        <div class="muted">Acessos ao vivo, abandono por etapa e dados de leads</div>
+      <div class="brand">
+        <img src="/logo2.png" alt="CT-e Fácil" />
       </div>
       <div class="row right">
         <span class="pill"><span class="live">●</span><span id="liveCount">0</span> ao vivo</span>
@@ -488,6 +517,39 @@ const adminHtml = `<!doctype html>
   </body>
 </html>`;
 
+const accessHtml = `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CT-e Fácil - Acesso</title>
+    <style>
+      :root { --bg:#0b1220; --card:#0f172a; --muted:#94a3b8; --text:#e2e8f0; --border:rgba(148,163,184,.18); --brand:#22c55e; }
+      body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,var(--bg),#020617);color:var(--text);min-height:100vh;display:grid;place-items:center;padding:18px}
+      .box{width:100%;max-width:420px;background:rgba(15,23,42,.94);border:1px solid var(--border);border-radius:12px;padding:22px;box-sizing:border-box}
+      .logo{display:flex;justify-content:center;margin-bottom:18px}
+      .logo img{display:block;height:52px;width:auto;max-width:240px;object-fit:contain}
+      h1{margin:0 0 8px;font-size:24px;text-align:center}
+      p{margin:0 0 18px;color:var(--muted);text-align:center;line-height:1.5}
+      label{display:block;margin:0 0 8px;font-size:13px;font-weight:700}
+      input{width:100%;height:50px;border:1px solid var(--border);border-radius:8px;background:#020617;color:var(--text);padding:0 14px;box-sizing:border-box}
+      button{width:100%;height:50px;margin-top:14px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-weight:800;cursor:pointer}
+      .error{margin-top:12px;padding:12px 14px;border:1px solid rgba(239,68,68,.4);background:rgba(127,29,29,.25);border-radius:8px;color:#fecaca;font-size:14px}
+    </style>
+  </head>
+  <body>
+    <form class="box" method="post" action="/acesso">
+      <div class="logo"><img src="/logo2.png" alt="CT-e Fácil" /></div>
+      <h1>Painel Admin</h1>
+      <p>Digite a senha para acessar os dados do funil.</p>
+      <label for="password">Senha</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+      <button type="submit">ENTRAR</button>
+      __ERROR__
+    </form>
+  </body>
+</html>`;
+
 function handleSse(req, res) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -523,10 +585,38 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/logo.png") {
     return serveFile(res, path.join(__dirname, "logo.png"));
   }
+  if (req.method === "GET" && url.pathname === "/logo2.png") {
+    return serveFile(res, path.join(__dirname, "logo2.png"));
+  }
   if (req.method === "GET" && url.pathname === "/admin") {
+    res.writeHead(302, { Location: "/acesso" });
+    return res.end();
+  }
+  if (req.method === "GET" && url.pathname === "/acesso") {
+    if (!isAdminAuthorized(req)) {
+      return text(res, 200, accessHtml.replace("__ERROR__", ""), "text/html");
+    }
     return text(res, 200, adminHtml, "text/html");
   }
+  if (req.method === "POST" && url.pathname === "/acesso") {
+    const body = await readBody(req);
+    const form = parseFormUrlEncoded(body);
+    if (String(form.password || "") !== ADMIN_PASSWORD) {
+      return text(
+        res,
+        401,
+        accessHtml.replace("__ERROR__", '<div class="error">Senha incorreta.</div>'),
+        "text/html"
+      );
+    }
+    res.writeHead(302, {
+      Location: "/acesso",
+      "Set-Cookie": ADMIN_COOKIE + "=" + ADMIN_COOKIE_VALUE + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400",
+    });
+    return res.end();
+  }
   if (req.method === "GET" && url.pathname === "/api/stream") {
+    if (!isAdminAuthorized(req)) return json(res, 401, { ok: false });
     return handleSse(req, res);
   }
 
@@ -542,6 +632,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/stats") {
+    if (!isAdminAuthorized(req)) return json(res, 401, { ok: false });
     const base = getFunnelStats();
     const live = getLiveSessions();
     const leads = Array.from(state.leads.values())
@@ -569,7 +660,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  process.stdout.write("Admin: http://localhost:" + PORT + "/admin\n");
+  process.stdout.write("Admin: http://localhost:" + PORT + "/acesso\n");
   process.stdout.write("Site:  http://localhost:" + PORT + "/\n");
 });
-
