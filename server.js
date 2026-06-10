@@ -529,8 +529,6 @@ const accessHtml = `<!doctype html>
       .box{width:100%;max-width:420px;background:rgba(15,23,42,.94);border:1px solid var(--border);border-radius:12px;padding:22px;box-sizing:border-box}
       .logo{display:flex;justify-content:center;margin-bottom:18px}
       .logo img{display:block;height:52px;width:auto;max-width:240px;object-fit:contain}
-      h1{margin:0 0 8px;font-size:24px;text-align:center}
-      p{margin:0 0 18px;color:var(--muted);text-align:center;line-height:1.5}
       label{display:block;margin:0 0 8px;font-size:13px;font-weight:700}
       input{width:100%;height:50px;border:1px solid var(--border);border-radius:8px;background:#020617;color:var(--text);padding:0 14px;box-sizing:border-box}
       button{width:100%;height:50px;margin-top:14px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-weight:800;cursor:pointer}
@@ -540,8 +538,6 @@ const accessHtml = `<!doctype html>
   <body>
     <form class="box" method="post" action="/acesso">
       <div class="logo"><img src="/logo2.png" alt="CT-e Fácil" /></div>
-      <h1>Painel Admin</h1>
-      <p>Digite a senha para acessar os dados do funil.</p>
       <label for="password">Senha</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required />
       <button type="submit">ENTRAR</button>
@@ -587,10 +583,6 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/logo2.png") {
     return serveFile(res, path.join(__dirname, "logo2.png"));
-  }
-  if (req.method === "GET" && url.pathname === "/admin") {
-    res.writeHead(302, { Location: "/acesso" });
-    return res.end();
   }
   if (req.method === "GET" && url.pathname === "/acesso") {
     if (!isAdminAuthorized(req)) {
