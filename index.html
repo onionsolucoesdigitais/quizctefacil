@@ -1931,17 +1931,21 @@
           plan_name: plan.name,
         });
 
-        var checkoutUrl = "#";
         var payload = buildCheckoutPayload();
-        var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-        var url = checkoutUrl === "#" ? "#" : checkoutUrl + (checkoutUrl.indexOf("?") >= 0 ? "&" : "?") + "p=" + encoded;
+        var name = (payload.lead && payload.lead.name ? String(payload.lead.name).trim() : "") || "Cliente";
+        var profile = state.answersLabel.perfil || getProfileSummary();
+        var message =
+          "Olá, quero começar agora com a CT-e Fácil.%0A%0A" +
+          "Nome: " + encodeURIComponent(name) + "%0A" +
+          "WhatsApp: " + encodeURIComponent(state.lead && state.lead.whatsapp ? state.lead.whatsapp : "") + "%0A" +
+          "CNPJ: " + encodeURIComponent(state.lead && state.lead.cnpj ? state.lead.cnpj : "") + "%0A" +
+          "Perfil: " + encodeURIComponent(profile) + "%0A" +
+          "Plano de interesse: " + encodeURIComponent(plan.name) + "%0A" +
+          "Valor: " + encodeURIComponent("R$ " + Number(plan.price).toFixed(2).replace(".", ",")) + "%0A" +
+          "Limite: " + encodeURIComponent(plan.limit);
 
-        if (url === "#") {
-          alert("Depois vamos colocar o checkout aqui.\n\nErro: Checkout não configurado.");
-          return;
-        }
-
-        window.location.href = url;
+        var whatsappUrl = "https://wa.me/5562942630250?text=" + message;
+        window.location.href = whatsappUrl;
       }
 
       document.getElementById("startIntroBtn").addEventListener("click", startQuiz);
